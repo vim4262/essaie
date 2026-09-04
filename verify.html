@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vérification d'attestation</title>
+<style>
+  :root{
+    --navy:#0f1f3d; --blue:#1d5cdc; --ok:#0a8f5b; --bad:#c92a2a; --bg:#f3f6fb;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    background:var(--bg); margin:0; padding:40px 16px; color:var(--navy);
+    min-height:100vh; display:flex; align-items:flex-start; justify-content:center;
+  }
+  .card{
+    max-width:640px; width:100%; background:#fff; border-radius:20px;
+    padding:36px; box-shadow:0 12px 40px rgba(15,31,61,.08);
+  }
+  h1{margin:0 0 4px; font-size:22px}
+  .sub{color:#6b7280; font-size:14px; margin-bottom:24px}
+  .status{font-weight:700; font-size:18px; margin-bottom:20px; display:flex; align-items:center; gap:8px}
+  .status.ok{color:var(--ok)}
+  .status.bad{color:var(--bad)}
+  .row{padding:12px 0; border-bottom:1px solid #eef0f4; display:flex; justify-content:space-between; gap:16px}
+  .row:last-child{border-bottom:none}
+  .label{font-size:12px; color:#8a8f9c; text-transform:uppercase; letter-spacing:.03em}
+  .value{font-weight:600; text-align:right}
+  .loading{color:#8a8f9c}
+  .empty-hint{color:#8a8f9c; font-size:14px; margin-top:8px}
+  footer{margin-top:24px; font-size:12px; color:#a7acb8; text-align:center}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>ESIG — Vérification d'attestation</h1>
+  <div class="sub">Système de vérification en ligne des attestations émises</div>
+  <div id="content" class="loading">Vérification en cours…</div>
+</div>
+
+<script>
+// ==== À CONFIGURER ====
+const SUPABASE_URL = "https://TON-PROJET.supabase.co";
+const SUPABASE_ANON_KEY = "TA_CLE_ANON_PUBLIQUE"; // clé "anon", jamais "service_role" ici
+// =======================
+
+async function verify() {
+  const params = new URLSearchParams(window.location.search);
+  const id = (params.get("id") || "").trim();
+  const content = document.getElementById("content");
+
+  if (!id) {
+    content.innerHTML = `
+      <div class="status bad">✕ Aucun code fourni</div>
+      <div class="empty-hint">Scannez le QR code présent sur l'attestation, ou ajoutez ?id=CODE à l'URL.</div>`;
+    return;
+  }
+
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/attestations?code=eq.${encodeURIComponent(id)}&select=*`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (!res.ok) throw new Error("Erreur réseau");
+    const rows = await res.json();
+
+    if (rows.length === 0) {
+      content.innerHTML = `
+        <div class="status bad">✕ Attestation non trouvée</div>
+        <div class="empty-hint">Le code <strong>${escapeHtml(id)}</strong> ne correspond à aucune attestation enregistrée.</div>`;
+      return;
+    }
+
+    const a = rows[0];
+    content.innerHTML = `
+      <div class="status ok">✓ Attestation authentique</div>
+      <div class="row"><div class="label">Participant</div><div class="value">${escapeHtml(a.full_name)}</div></div>
+      <div class="row"><div class="label">Type</div><div class="value">${escapeHtml(a.type)}</div></div>
+      <div class="row"><div class="label">Événement</div><div class="value">${escapeHtml(a.event_name)}</div></div>
+      <div class="row"><div class="label">Date</div><div class="value">${escapeHtml(a.event_date)}</div></div>
+      <div class="row"><div class="label">Numéro</div><div class="value">${escapeHtml(a.code)}</div></div>`;
+  } catch (e) {
+    content.innerHTML = `
+      <div class="status bad">✕ Erreur de vérification</div>
+      <div class="empty-hint">Impossible de contacter le service de vérification. Réessayez plus tard.</div>`;
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+verify();
+</script>
+
+<footer>ESIG Global Success — Vérification automatisée</footer>
+</body>
+</html>
